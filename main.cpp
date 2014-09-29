@@ -2,7 +2,7 @@
  
 #include <cstring>
 #include <memory>
-#include <fstream
+#include <fstream>
 
 int main(int argc, char** argv) {
     std::string file_path;
