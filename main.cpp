@@ -13,6 +13,7 @@ int main(int argc, char** argv) {
         file_path = argv[1]; 
     } else {
         file_path = "/media/alex/DATA/big_ext";
+        // test
     }
 
     std::ofstream output, meta_output;
