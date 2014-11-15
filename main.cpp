@@ -13,9 +13,6 @@ int main(int argc, char** argv) {
         file_path = argv[1]; 
     } else {
         file_path = "/media/alex/DATA/big_ext";
-        //file_path = "/media/alex/DATA/flash_img.img";
-        //printf("fail\n");
-        //return 0;
     }
 
     std::ofstream output, meta_output;
