@@ -7,13 +7,10 @@
 int main(int argc, char** argv) {
     std::string file_path;
     
-    std::shared_ptr<std::fstream> ggg(new std::fstream), fff;
-    
     if (argc == 2) {
         file_path = argv[1]; 
     } else {
         file_path = "/media/alex/DATA/big_ext";
-        // test
     }
 
     std::ofstream output, meta_output;
