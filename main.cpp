@@ -23,7 +23,8 @@ int main(int argc, char** argv) {
     if (argc == 2) {
         file_path = argv[1]; 
     } else {
-        file_path = "/media/alex/DATA/flash_img.img";
+        //file_path = "/media/alex/DATA/flash_img.img";
+        file_path = "/media/alex/DATA/big_ext";
     }
     
     std::shared_ptr<std::ofstream> output(new std::ofstream),
