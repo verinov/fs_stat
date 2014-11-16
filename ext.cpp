@@ -46,7 +46,7 @@ enum ExtConsts {
     EXT4_BG_INODE_ZEROED = 0x4
 };
 
-Ext::Ext(Disk* disk) {
+Ext::Ext(std::shared_ptr<Disk> disk) {
     disk_ = disk;
 
     std::unique_ptr<ExtSuperBlock> sb(new ExtSuperBlock);
@@ -96,7 +96,7 @@ Ext::Ext(Disk* disk) {
 Ext::~Ext() {
 }
 
-void Ext::analize(std::ofstream& output, std::ofstream& meta_output) {
+void Ext::Parse(BlockFunc& printBlock, MetadataFunc& printMetadata) {
     ExtGroupDesc bg_desc;
 
     int bg_per_metabg = block_size_ / desc_size_;
@@ -105,7 +105,7 @@ void Ext::analize(std::ofstream& output, std::ofstream& meta_output) {
     //first groups in the beginning are in the same "meta_bg"
     for (int bg = 0; bg < meta_bg_start; bg++) {
         disk_->read(&bg_desc, desc_size_, (first_block_ + 1) * block_size_ + bg * desc_size_);
-        analize_desc(output, meta_output, bg_desc, bg);
+        analize_desc(printBlock, printMetadata, bg_desc, bg);
     }
 
     //process metablocks
@@ -114,12 +114,12 @@ void Ext::analize(std::ofstream& output, std::ofstream& meta_output) {
         for (int bg = 0; bg < bg_per_metabg && blocks_per_group_ * (metabg_first_bg + bg - 1) < blocks_count_; bg++) {
             disk_->read(&bg_desc, desc_size_, (1 + first_block_ + metabg_first_bg * blocks_per_group_) * block_size_ +
                     bg * desc_size_);
-            analize_desc(output, meta_output, bg_desc, metabg_first_bg + bg);
+            analize_desc(printBlock, printMetadata, bg_desc, metabg_first_bg + bg);
         }
     }
 }
 
-void Ext::analize_desc(std::ofstream& output, std::ofstream& meta_output, const ExtGroupDesc& desc, uint32_t group_num) {
+void Ext::analize_desc(BlockFunc& printBlock, MetadataFunc& printMetadata, const ExtGroupDesc& desc, uint32_t group_num) {
     if (desc.bg_flags & EXT4_BG_INODE_UNINIT) {
         return;
     }
@@ -147,7 +147,7 @@ void Ext::analize_desc(std::ofstream& output, std::ofstream& meta_output, const 
                     if (bitmap_chunk.get()[i] & (1 << j)) {
                         disk_->read(inode.get(), inode_size_,
                                 (first_block_ + inode_table_off) * block_size_ + inode_size_ * (8 * i + j));
-                        analize_inode(output, meta_output, (ExtInode*) inode.get(),
+                        analize_inode(printBlock, printMetadata, (ExtInode*) inode.get(),
                                 group_num * inodes_per_group_ + 8 * (k + i) + j + 1);
                     }
                 }
@@ -156,7 +156,7 @@ void Ext::analize_desc(std::ofstream& output, std::ofstream& meta_output, const 
     }
 }
 
-void Ext::print_inode_metadata(std::ofstream& meta_output, const ExtInode* inode, uint32_t inode_num) {
+void Ext::print_inode_metadata(MetadataFunc& printMetadata, const ExtInode* inode, uint32_t inode_num) {
     uint64_t file_size = inode->i_size_lo;
     file_size += ((uint64_t) inode->i_size_high << 32);
 
@@ -176,11 +176,11 @@ void Ext::print_inode_metadata(std::ofstream& meta_output, const ExtInode* inode
         crtime = crtime + (inode->i_crtime_extra % 4) * 0x100000000 + (inode->i_crtime_extra >> 2);
     }
     
-    meta_output << inode_num << "," << file_size << "," << compressed_flag << ","
-            << encrypt_flag << "," << ctime << "," << mtime << "," << atime << "\n";
+    printMetadata(inode_num, file_size,
+        compressed_flag, encrypt_flag, ctime, mtime, atime);
 }
 
-void Ext::analize_inode(std::ofstream& output, std::ofstream& meta_output, const ExtInode* inode, uint32_t inode_num) {
+void Ext::analize_inode(BlockFunc& printBlock, MetadataFunc& printMetadata, const ExtInode* inode, uint32_t inode_num) {
     if (inode->i_links_count == 0) {
         return;
     }
@@ -190,12 +190,10 @@ void Ext::analize_inode(std::ofstream& output, std::ofstream& meta_output, const
 
     bool extents_flag = 0x80000 & inode->i_flags;
     bool huge_file_flag = 0x40000 & inode->i_flags;
-    bool ea_inode_flag = 0x200000 & inode->i_flags; //TODO: do we need extended attributes?
+    bool ea_inode_flag = 0x200000 & inode->i_flags; // TODO: do we need extended attributes?
     bool inline_data_flag = 0x10000000 & inode->i_flags;
 
-    if (meta_output) {
-        print_inode_metadata(meta_output, inode, inode_num);
-    }
+    print_inode_metadata(printMetadata, inode, inode_num);
 
     if (inline_data_flag) {
         // there are no blocks for this inode
@@ -211,29 +209,29 @@ void Ext::analize_inode(std::ofstream& output, std::ofstream& meta_output, const
         int entry_count = extent_header->eh_entries;
         int depth = extent_header->eh_depth;
         for (int i = 1; i <= entry_count; ++i) {
-            analize_extent_node(output, curr_offset, (char*) inode->i_block + 12 * i,
+            analize_extent_node(printBlock, curr_offset, (char*) inode->i_block + 12 * i,
                     start_offset, start_phys_offset, next_phys_offset, file_size, depth, inode_num);
         }
 
         if (start_phys_offset != 0) {
-            output << inode_num << "," << file_size << "," << start_offset << ","
-                    << start_phys_offset << "," << curr_offset - start_offset << "\n";
+            printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
         }
     } else {
         //block map
         for (uint32_t record = 0; record < 12 && curr_offset * block_size_ < file_size; ++record) {
-            analize_block(output, curr_offset, inode->i_block[record],
+            analize_block(printBlock, curr_offset, inode->i_block[record],
                     start_offset, start_phys_offset, next_phys_offset, file_size, 0, inode_num);
         }
 
         for (int i = 1; i <= 3 && curr_offset * block_size_ < file_size; ++i) {
-            analize_block(output, curr_offset, inode->i_block[11 + i],
+            analize_block(printBlock, curr_offset, inode->i_block[11 + i],
                     start_offset, start_phys_offset, next_phys_offset, file_size, i, inode_num);
         }
 
         if (start_phys_offset != 0) {
-            output << inode_num << "," << file_size << "," << start_offset << ","
-                    << start_phys_offset << "," << curr_offset - start_offset << "\n";
+            printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
         }
     }
 }
@@ -247,7 +245,7 @@ inline uint32_t power(uint32_t base, int power) {
 }
 
 //mapping only applicable for lower 2^32 blocks
-void Ext::analize_block(std::ofstream& output, uint32_t& curr_offset, uint32_t block_phys_offset,
+void Ext::analize_block(BlockFunc& printBlock, uint32_t& curr_offset, uint32_t block_phys_offset,
         uint32_t& start_offset, uint32_t& start_phys_offset, uint32_t& next_phys_offset,
         uint64_t file_size, int depth, uint32_t inode_num) {
 
@@ -258,8 +256,8 @@ void Ext::analize_block(std::ofstream& output, uint32_t& curr_offset, uint32_t b
     if (block_phys_offset == 0) {
         //everything in this subtree is zeroes
         if (start_phys_offset != 0) {
-            output << inode_num << "," << file_size << "," << start_offset << ","
-                    << start_phys_offset << "," << curr_offset - start_offset << "\n";
+            printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
         }
 
         start_offset = -1; //just for debug, this value shouldn't be used anywhere
@@ -274,8 +272,8 @@ void Ext::analize_block(std::ofstream& output, uint32_t& curr_offset, uint32_t b
             next_phys_offset++;
         } else {
             if (start_phys_offset != 0) {
-                output << inode_num << "," << file_size << "," << start_offset << ","
-                        << start_phys_offset << "," << curr_offset - start_offset << "\n";
+                printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
             }
             start_offset = curr_offset;
             start_phys_offset = block_phys_offset;
@@ -289,13 +287,13 @@ void Ext::analize_block(std::ofstream& output, uint32_t& curr_offset, uint32_t b
         disk_->read(block.get(), block_size_, block_phys_offset * block_size_);
 
         for (uint32_t record = 0; record < block_size_ && curr_offset * block_size_ < file_size; record += 4) {
-            analize_block(output, curr_offset, *((uint32_t*) (block.get() + record)), start_offset, start_phys_offset,
+            analize_block(printBlock, curr_offset, *((uint32_t*) (block.get() + record)), start_offset, start_phys_offset,
                     next_phys_offset, file_size, depth - 1, inode_num);
         }
     }
 }
 
-void Ext::analize_extent_node(std::ofstream& output, uint32_t& curr_offset, char* entry,
+void Ext::analize_extent_node(BlockFunc& printBlock, uint32_t& curr_offset, char* entry,
         uint32_t& start_offset, uint32_t& start_phys_offset, uint32_t& next_phys_offset,
         uint64_t file_size, int depth, uint32_t inode_num) {
 
@@ -304,7 +302,7 @@ void Ext::analize_extent_node(std::ofstream& output, uint32_t& curr_offset, char
     }
 
     if (depth == 0) {
-        analize_extent(output, curr_offset, (ExtExtent*) entry,
+        analize_extent(printBlock, curr_offset, (ExtExtent*) entry,
                 start_offset, start_phys_offset, next_phys_offset,
                 file_size, inode_num);
     } else {
@@ -318,13 +316,13 @@ void Ext::analize_extent_node(std::ofstream& output, uint32_t& curr_offset, char
         int entry_count = extent_header->eh_entries;
         int depth = extent_header->eh_depth;
         for (int i = 1; i <= entry_count; i++) {
-            analize_extent_node(output, curr_offset, node_block.get() + 12 * i,
+            analize_extent_node(printBlock, curr_offset, node_block.get() + 12 * i,
                     start_offset, start_phys_offset, next_phys_offset, file_size, depth, inode_num);
         }
     }
 }
 
-void Ext::analize_extent(std::ofstream& output, uint32_t& curr_offset, const ExtExtent* extent,
+void Ext::analize_extent(BlockFunc& printBlock, uint32_t& curr_offset, const ExtExtent* extent,
         uint32_t& start_offset, uint32_t& start_phys_offset, uint32_t& next_phys_offset,
         uint64_t file_size, uint32_t inode_num) {
 
@@ -340,8 +338,8 @@ void Ext::analize_extent(std::ofstream& output, uint32_t& curr_offset, const Ext
         } else {
             // row breaks
             if (start_phys_offset != 0) {
-                output << inode_num << "," << file_size << "," << start_offset << ","
-                        << start_phys_offset << "," << curr_offset - start_offset << "\n";
+                printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
             }
             start_offset = curr_offset;
             start_phys_offset = extent_phys_offset;
@@ -353,8 +351,8 @@ void Ext::analize_extent(std::ofstream& output, uint32_t& curr_offset, const Ext
         // uninitialized extent
         len -= 32768;
         if (start_phys_offset != 0) {
-            output << inode_num << "," << file_size << "," << start_offset << ","
-                    << start_phys_offset << "," << curr_offset - start_offset << "\n";
+            printBlock(std::to_string(inode_num), file_size, start_offset,
+                    start_phys_offset, curr_offset - start_offset);
         }
 
         start_offset = -1; // just for debug, this value shouldn't be used anywhere

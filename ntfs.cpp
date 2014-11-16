@@ -12,7 +12,7 @@ inline uint64_t MIN(uint64_t x, uint64_t y){
     return x < y ? x : y;
 }
 
-NTFS::NTFS(Disk* disk) {
+NTFS::NTFS(std::shared_ptr<Disk> disk) {
     disk_ = disk;
 
     std::unique_ptr<NTFSBootSector> boot(new NTFSBootSector);
@@ -261,7 +261,7 @@ size_t NTFS::read_runlist(uint64_t offset, size_t count, char* str, NTFSRunlistE
     return bytes_read;
 }
 
-size_t NTFS::analize_fr(std::ofstream& output, std::ofstream& meta_output, uint64_t fr_num) {
+size_t NTFS::analize_fr(BlockFunc& printBlock, MetadataFunc& printMetadata, uint64_t fr_num) {
     std::unique_ptr<char> fr_placefolder;
     NTFSMftEntry *fr;
     if (fr_num == 0) {
@@ -278,16 +278,16 @@ size_t NTFS::analize_fr(std::ofstream& output, std::ofstream& meta_output, uint6
 
     for (; basic_attr->type_id != 0xffffffff; attr_shift(basic_attr, basic_attr->attr_len)) {
         if (basic_attr->nonresident_flag) {
-            analize_nonres_attr(output, meta_output, fr_num, (NTFSNonresidentAttr*) basic_attr, base_fr_num);
+            analize_nonres_attr(printBlock, fr_num, (NTFSNonresidentAttr*) basic_attr, base_fr_num);
         } else {
-            analize_res_attr(output, meta_output, fr_num, (NTFSResidentAttr*) basic_attr, base_fr_num);
+            analize_res_attr(printMetadata, fr_num, (NTFSResidentAttr*) basic_attr, base_fr_num);
         }
     }
     
     return 0;
 }
 
-size_t NTFS::analize_nonres_attr(std::ofstream& output, std::ofstream& meta_output, uint64_t fr_num, 
+size_t NTFS::analize_nonres_attr(BlockFunc& printBlock, uint64_t fr_num, 
                                  NTFSNonresidentAttr* attr, uint64_t base_fr_num) {
     uint16_t attr_name[127];
     if (attr->name_len) {
@@ -310,16 +310,20 @@ size_t NTFS::analize_nonres_attr(std::ofstream& output, std::ofstream& meta_outp
             run_format->runlen_length))) << (64 - offset_size)) >> (64 - offset_size));
 
     uint64_t vcn = attr->start_vcn;
-
+    
+    std::string fileId = std::to_string(base_fr_num) + ":" + 
+            std::to_string(attr->type_id);
+    
+    // TODO: deal with attr name
+/*    
+    std::unique_ptr<char> attr_name8(new char[attr->name_len * 2]);
+    size_t str_len = utf16_to_utf8(attr_name, attr_name + attr->name_len,
+            attr_name8.get(), attr_name8.get() + attr->name_len * 2);
+    output.write(attr_name8.get(), str_len);
+*/
     while (*(char*) run_format) {
-        output << base_fr_num << "," << attr->type_id << ",";
-
-        std::unique_ptr<char> attr_name8(new char[attr->name_len * 2]);
-        size_t str_len = utf16_to_utf8(attr_name, attr_name + attr->name_len,
-                attr_name8.get(), attr_name8.get() + attr->name_len * 2);
-        output.write(attr_name8.get(), str_len);
         
-        output << "," << actual_size << "," << vcn << "," << run_offset << "," << run_length << "\n";
+        printBlock(fileId, actual_size, vcn, run_offset, run_length);
 
         run_format = run_format + 1 + run_format->runlen_length + run_format->offset_length;
         vcn += run_length;
@@ -331,7 +335,7 @@ size_t NTFS::analize_nonres_attr(std::ofstream& output, std::ofstream& meta_outp
     }//while run list isn't read
 }
 
-size_t NTFS::analize_res_attr(std::ofstream& output, std::ofstream& meta_output, uint64_t fr_num,
+size_t NTFS::analize_res_attr(MetadataFunc& printMetadata, uint64_t fr_num,
                               NTFSResidentAttr* attr, uint64_t base_fr_num) {
     if (attr->type_id == 16) {
         NTFSStdInfo* std_info = (NTFSStdInfo*) ((char*) attr + attr->content_offset);
@@ -340,16 +344,15 @@ size_t NTFS::analize_res_attr(std::ofstream& output, std::ofstream& meta_output,
         bool compressed_flag = flags & 0x800;
         bool encrypt_flag = flags & 0x4000;
 
-        if ((base_fr_num == fr_num) && meta_output) {
-            meta_output << fr_num << "," << read_fr_for_attr_size(fr_num, 128, nullptr) << ","
-                    << compressed_flag << "," << encrypt_flag << "," << std_info->ctime
-                    << "," << std_info->mtime << "," << std_info->atime << "\n";
-
+        if (base_fr_num == fr_num) {
+            
+            printMetadata(fr_num, read_fr_for_attr_size(fr_num, 128, nullptr),
+        compressed_flag, encrypt_flag, std_info->ctime, std_info->mtime, std_info->atime);
         }
     }
 }
 
-void NTFS::analize(std::ofstream& output, std::ofstream& meta_output) {
+void NTFS::Parse(BlockFunc& printBlock, MetadataFunc& printMetadata) {
     const unsigned byte_count = 512;
     std::unique_ptr<char[]> bitmap_block(new char[byte_count]);
 
@@ -361,7 +364,7 @@ void NTFS::analize(std::ofstream& output, std::ofstream& meta_output) {
             if (bitmap_block[i]) {
                 for (int j = 0; j < 8; j++) {
                     if (bitmap_block[i] & (1 << j)) {
-                        analize_fr(output, meta_output, 8 * (offset + i) + j);
+                        analize_fr(printBlock, printMetadata, 8 * (offset + i) + j);
                     }
                 }
             }
