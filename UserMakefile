@@ -1,0 +1,22 @@
+CC=g++
+CFLAGS=-w -std=c++0x -O3
+DEPS=fs_stat.h
+SOURCES=main.cpp
+OBJECTS=$(SOURCES:.cpp=.o)
+RESULT=fs_user
+FSSTATLIB=.
+FSSTATINCL=.
+
+all: $(SOURCES) $(RESULT)
+	
+$(RESULT): $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ -L. -Wl,-rpath,$(FSSTATLIB) -lfs_stat
+
+%.o:$(DEPS)
+	$(CC) $(CFLAGS) -c -I$(FSSTATINCL) $*.cpp -o $@
+
+clean:
+	rm -rf *.o fs_user
+
+
+
