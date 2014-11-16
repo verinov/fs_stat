@@ -1,18 +1,19 @@
 CC=g++
-CFLAGS=-w -std=c++0x -O3
+CFLAGS=-w -std=c++0x -O2
 DEPS=FS.h fs_stat.h fs_structs.h
-SOURCES=main.cpp Disk.cpp ext.cpp FS.cpp ntfs.cpp
+SOURCES=Disk.cpp ext.cpp FS.cpp ntfs.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
-EXECUTABLE=fs_stat
+RESULT=libfs_stat.so
 
 
-all: $(SOURCES) $(EXECUTABLE)
+all: $(SOURCES) $(RESULT)
 	
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@
+$(RESULT): $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ -shared -fPIC
 
 %.o:$(DEPS)
-	$(CC) $(CFLAGS) -c $*.cpp -o $@
+	$(CC) $(CFLAGS) -c -fPIC $*.cpp -o $@
 
 clean:
-	rm -rf *.o fs_stat
+	rm -rf *.o libfs_stat.so
+
