@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-w -std=c++0x -O2
+CFLAGS=-w -std=c++0x -O3
 DEPS=FS.h fs_stat.h fs_structs.h
 SOURCES=Disk.cpp ext.cpp FS.cpp ntfs.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
