@@ -2,6 +2,10 @@
 
 #include <memory>
 
+#include <locale>
+
+#include <iostream>
+
 enum {
     ATTR_COMPRESSED = 1,
     ATTR_ENCRYPTED = 0x4000,
@@ -61,9 +65,10 @@ void NTFS::fixup(char * start) {
     }
 }
 
-size_t utf16_to_utf8(uint16_t* start16, uint16_t* end16, char* start8, char* end8) {
+size_t utf16_to_utf8(char16_t* const start16, char16_t* const end16,
+        char* const start8, char* const end8) {
 
-    uint16_t* ptr16 = start16;
+    char16_t* ptr16 = start16;
     char* ptr8 = start8;
     uint32_t chr;
     while (ptr16 < end16 && ptr8 < end8) {
@@ -289,7 +294,7 @@ size_t NTFS::analize_fr(BlockFunc& printBlock, MetadataFunc& printMetadata, uint
 
 size_t NTFS::analize_nonres_attr(BlockFunc& printBlock, uint64_t fr_num, 
                                  NTFSNonresidentAttr* attr, uint64_t base_fr_num) {
-    uint16_t attr_name[127];
+    char16_t attr_name[127];
     if (attr->name_len) {
         memcpy((char*) attr_name, (char*) attr + attr->name_offset, attr->name_len * 2);
     }
@@ -311,16 +316,15 @@ size_t NTFS::analize_nonres_attr(BlockFunc& printBlock, uint64_t fr_num,
 
     uint64_t vcn = attr->start_vcn;
     
-    std::string fileId = std::to_string(base_fr_num) + ":" + 
-            std::to_string(attr->type_id);
-    
-    // TODO: deal with attr name
-/*    
-    std::unique_ptr<char> attr_name8(new char[attr->name_len * 2]);
+    std::string attr_name8;
+    attr_name8.resize(attr->name_len * 2);
     size_t str_len = utf16_to_utf8(attr_name, attr_name + attr->name_len,
-            attr_name8.get(), attr_name8.get() + attr->name_len * 2);
-    output.write(attr_name8.get(), str_len);
-*/
+            &attr_name8[0], &attr_name8[attr->name_len * 2]);
+    attr_name8.resize(str_len);
+ 
+    std::string fileId = std::to_string(base_fr_num) + ":" + 
+            std::to_string(attr->type_id) + ":" + attr_name8;
+    
     while (*(char*) run_format) {
         
         printBlock(fileId, actual_size, vcn, run_offset, run_length);
