@@ -1,11 +1,5 @@
 #include "FS.h"
 
-#include <memory>
-
-#include <locale>
-
-#include <iostream>
-
 enum {
     ATTR_COMPRESSED = 1,
     ATTR_ENCRYPTED = 0x4000,
