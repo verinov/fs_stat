@@ -157,6 +157,7 @@ void Ext::analize_desc(BlockFunc& printBlock, MetadataFunc& printMetadata, const
 }
 
 void Ext::print_inode_metadata(MetadataFunc& printMetadata, const ExtInode* inode, uint32_t inode_num) {
+    return; // approx. -15% time
     uint64_t file_size = inode->i_size_lo;
     file_size += ((uint64_t) inode->i_size_high << 32);
 
@@ -176,8 +177,7 @@ void Ext::print_inode_metadata(MetadataFunc& printMetadata, const ExtInode* inod
         crtime = crtime + (inode->i_crtime_extra % 4) * 0x100000000 + (inode->i_crtime_extra >> 2);
     }
     
-    printMetadata(inode_num, file_size,
-        compressed_flag, encrypt_flag, ctime, mtime, atime);
+    printMetadata(inode_num, file_size, compressed_flag, encrypt_flag, ctime, mtime, atime);
 }
 
 void Ext::analize_inode(BlockFunc& printBlock, MetadataFunc& printMetadata, const ExtInode* inode, uint32_t inode_num) {
