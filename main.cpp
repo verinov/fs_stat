@@ -4,6 +4,10 @@
 #include <memory>
 #include <fstream>
 
+#include <chrono>
+#include <ctime>
+#include <iostream>
+
 void PrintBlock(std::shared_ptr<typename std::ofstream>  output, std::string fileId, uint64_t file_size,
         uint32_t start_offset, uint32_t start_phys_offset, int32_t len) {
     *output << fileId << "," << file_size << "," << start_offset << ","
@@ -17,16 +21,7 @@ void PrintMetadata(std::shared_ptr<typename std::ofstream>  meta_output,
             << encrypted << "," << ctime << "," << mtime << "," << atime << "\n";
 }
 
-int main(int argc, char** argv) {
-    std::string file_path;
-    
-    if (argc == 2) {
-        file_path = argv[1]; 
-    } else {
-        //file_path = "/media/alex/DATA/flash_img.img";
-        file_path = "/media/alex/DATA/big_ext";
-    }
-    
+float Test(std::string file_path) {
     std::shared_ptr<std::ofstream> output(new std::ofstream),
             meta_output(new std::ofstream);
     
@@ -51,11 +46,30 @@ int main(int argc, char** argv) {
                 std::placeholders::_4, std::placeholders::_5, std::placeholders::_6,
                 std::placeholders::_7);
     
-    
+    std::chrono::time_point<std::chrono::system_clock> timerStart, timerEnd;
+    timerStart = std::chrono::system_clock::now();
     file_sys.Parse(printBlck, printMeta);
-    
+    timerEnd = std::chrono::system_clock::now();
+    float elapsed_seconds = ((float) std::chrono::duration_cast<std::chrono::microseconds>
+                             (timerEnd-timerStart).count()) / 1000000;
     output->close();
     meta_output->close();
+    return elapsed_seconds;
+}
+
+int main(int argc, char** argv) {
+    std::string file_path;
+
+    // sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+    for (int iter = 0; iter < 10; ++iter) {
+        system("sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'");
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/big_ext") << std::endl;
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext4") << std::endl;
+        std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/flash_img.img") << std::endl;
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext3") << std::endl;
+    }
+    
+    std::cout.flush();
 
     return 0;
 }

@@ -13,9 +13,9 @@ struct __attribute__((__packed__)) NTFSMftEntry {
     uint16_t first_attr_offset;
     uint16_t flags;
     uint32_t used_entry_size;
-    uint32_t alloc_entry_size;
+    uint32_t alloc_entry_size;uint64_t base_fr : 48;
     uint16_t base_fr_seq_number;
-    uint64_t base_fr : 48;
+    
     uint16_t next_attr_id;
     //attributes and fixup values are omitted here
 };
@@ -90,8 +90,8 @@ struct __attribute__((__packed__)) NTFSAttrListEntry {
     uint8_t name_len;
     uint8_t name_offset;
     uint64_t start_vcn;
-    uint16_t fr_seq_number;
     uint64_t fr : 48;
+    uint16_t fr_seq_number;    
     uint8_t attr_id;
 };
 
