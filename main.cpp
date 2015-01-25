@@ -61,12 +61,12 @@ int main(int argc, char** argv) {
     std::string file_path;
 
     // sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
-    for (int iter = 0; iter < 5; ++iter) {
+    for (int iter = 0; iter < 10; ++iter) {
         system("sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'");
-        std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/big_ext") << std::endl;
-        std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext4") << std::endl;
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/big_ext") << std::endl;
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext4") << std::endl;
         std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/flash_img.img") << std::endl;
-        std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext3") << std::endl;
+        //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext3") << std::endl;
     }
     
     std::cout.flush();

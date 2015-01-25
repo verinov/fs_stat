@@ -1,5 +1,7 @@
 #include "FS.h"
 
+#include <iostream>
+
 enum {
     ATTR_COMPRESSED = 1,
     ATTR_ENCRYPTED = 0x4000,
@@ -43,10 +45,10 @@ NTFS::~NTFS() {
     delete tmp_fr_;
 }
 
-void NTFS::fixup(char * start) {
+void NTFS::fixup(char* start) {
     unsigned fixup_off = *((unsigned*) (start + 4)) % 0x10000; //offset to fixup value and array
     unsigned fixup_count = *((unsigned*) (start + 6)) % 0x10000 - 1; //entries in fixup array
-    for (unsigned i = 0; i < fixup_count; i++) {
+    for (unsigned i = 0; i < fixup_count; ++i) {
         if (start[(i + 1) * sector_size_ - 2] != start[fixup_off] ||
                 start[(i + 1) * sector_size_ - 1] != start[fixup_off + 1]) {
             throw std::runtime_error("fixup mismatch");;
@@ -55,7 +57,7 @@ void NTFS::fixup(char * start) {
         start[(i + 1) * sector_size_ - 1] = start[fixup_off + 3 + i * 2];
     }
     if (!memcmp(start, "BAAD", 4)) {
-        throw std::runtime_error("BAAD");
+       throw std::runtime_error("BAAD");
     }
 }
 
@@ -170,20 +172,21 @@ size_t NTFS::read_al(NTFSMftEntry *fr, NTFSAttribute* attr, uint64_t fr_num, uin
         uint64_t nonbase_fr_num = list_entry->fr;
         unsigned attr_id = list_entry->attr_id;
         
-        std::unique_ptr<char> nbfr_placefolder;
+        std::unique_ptr<char> nbfr_placeholder;
 
         if (fr_num == nonbase_fr_num) {
             nonbase_fr = fr;
         } else {
-            nbfr_placefolder = std::unique_ptr<char>(new char[fr_size_]);
-            nonbase_fr = (NTFSMftEntry*) nbfr_placefolder.get();
+            nbfr_placeholder = std::unique_ptr<char>(new char[fr_size_]);
+            nonbase_fr = (NTFSMftEntry*) nbfr_placeholder.get();
             read_fr(0, 128, nullptr, nonbase_fr_num * fr_size_, fr_size_, (char*) nonbase_fr);
             fixup((char*) nonbase_fr);
         }
 
-        NTFSAttribute* tmp_attr = (NTFSAttribute*) ((char*) nonbase_fr + nonbase_fr->first_attr_offset);
-        unsigned tmp_attr_offset = nonbase_fr->first_attr_offset;
-        for (; tmp_attr->type_id != 0xffffffff && count; attr_shift(tmp_attr, tmp_attr->attr_len)) {
+        for (NTFSAttribute* tmp_attr = 
+                    (NTFSAttribute*) ((char*) nonbase_fr + nonbase_fr->first_attr_offset);
+                tmp_attr->type_id != 0xffffffff && count;
+                attr_shift(tmp_attr, tmp_attr->attr_len)) {
             if (tmp_attr->attr_id == attr_id) {
                 size_t tmp_bytes_read = read_attr((char*) tmp_attr,
                         offset - vcn_start*cluster_size_, count, str);
@@ -226,11 +229,10 @@ size_t NTFS::read_runlist(uint64_t offset, size_t count, char* str, NTFSRunlistE
     size_t bytes_read = 0;
     uint64_t vcn = 0;
 
-    while (*(char*) run_format && count) {
+    while (*(char*) run_format && count) {       
         if (offset < vcn * cluster_size_) {
             throw std::runtime_error("DATA MISSING");
         }
-        size_t tmp_bytes_read = 0;
 
         size_t len = 0;
         if ((vcn + run_length) * cluster_size_ > offset) {
@@ -256,7 +258,7 @@ size_t NTFS::read_runlist(uint64_t offset, size_t count, char* str, NTFSRunlistE
         str += len;
         bytes_read += len;
     } // while run list isn't read
-
+    
     return bytes_read;
 }
 
@@ -387,11 +389,9 @@ uint64_t NTFS::read_fr_for_attr_size(uint64_t base_fr_num, uint32_t type, char* 
             memcpy(attr_name, (char*) attr + attr->name_offset, attr->name_len * 2);
         }
         if (attr->type_id == type && (!(name || attr->name_len) || (name && attr->name_len && !memcmp(attr_name, name, 2 * attr->name_len)))) {
-            if (attr->nonresident_flag) {
-                return ((NTFSNonresidentAttr*) attr)->actual_content_size;
-            } else {
-                return ((NTFSResidentAttr*) attr)->content_size;
-            }
+            return attr->nonresident_flag ?
+                ((NTFSNonresidentAttr*) attr)->actual_content_size :
+                ((NTFSResidentAttr*) attr)->content_size;
         }
         if (attr->type_id == 32) {
             return read_al_for_attr_size(attr, fr, base_fr_num, type, name);
@@ -404,9 +404,30 @@ uint64_t NTFS::read_al_for_attr_size(NTFSAttribute *attr, NTFSMftEntry *fr,
                                      uint64_t base_fr_num, uint32_t type, char* name) {
     char list_entry_buffer[280];
     NTFSAttrListEntry* list_entry = (NTFSAttrListEntry*) list_entry_buffer;
-    size_t list_entry_offset = 0;
-
-    for (; read_attr((char*) attr, list_entry_offset, 280, (char*) list_entry); list_entry_offset += list_entry->entry_len) {
+    uint32_t attr_list_size = (attr->nonresident_flag ?
+                ((NTFSNonresidentAttr*) attr)->actual_content_size :
+                ((NTFSResidentAttr*) attr)->content_size);
+    
+    for (size_t list_entry_offset = 0;
+            list_entry_offset < attr_list_size &&
+                read_attr((char*) attr, list_entry_offset, 280, (char*) list_entry);
+            list_entry_offset += list_entry->entry_len) {
+        
+       /* std::cout << (attr->nonresident_flag ?
+                ((NTFSNonresidentAttr*) attr)->actual_content_size :
+                ((NTFSResidentAttr*) attr)->content_size) << " "
+                << list_entry->entry_len << " " 
+                << list_entry->fr << " "
+                << base_fr_num << " " 
+                << type << " "
+                << list_entry->type_id << " "
+                << attr->attr_len << std::endl;*/
+        
+        if (list_entry_offset == 184 &&
+                list_entry->entry_len == 0) {
+            throw;
+        }
+        
         if ((list_entry->type_id != type) || (list_entry->start_vcn != 0) ||
                 memcmp(name, (char*) list_entry + list_entry->name_offset, list_entry->name_len)) {
             continue;
@@ -415,13 +436,13 @@ uint64_t NTFS::read_al_for_attr_size(NTFSAttribute *attr, NTFSMftEntry *fr,
         NTFSMftEntry* nonbase_fr;
         uint64_t nonbase_fr_num = list_entry->fr;
         
-        std::unique_ptr<char> nbfr_placefolder;
+        std::unique_ptr<char> nbfr_placeholder;
 
         if (base_fr_num == nonbase_fr_num) {
             nonbase_fr = fr;
         } else {
-            nbfr_placefolder = std::unique_ptr<char>(new char[fr_size_]);
-            nonbase_fr = (NTFSMftEntry*) nbfr_placefolder.get();
+            nbfr_placeholder = std::unique_ptr<char>(new char[fr_size_]);
+            nonbase_fr = (NTFSMftEntry*) nbfr_placeholder.get();
             read_fr(0, 128, nullptr, nonbase_fr_num * fr_size_, fr_size_, (char*) nonbase_fr);
             fixup((char*) nonbase_fr);
         }
@@ -439,5 +460,5 @@ uint64_t NTFS::read_al_for_attr_size(NTFSAttribute *attr, NTFSMftEntry *fr,
             }
         }
     }
-    throw std::runtime_error("attr missing");
+    return 0;
 }
