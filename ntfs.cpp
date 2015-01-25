@@ -412,17 +412,7 @@ uint64_t NTFS::read_al_for_attr_size(NTFSAttribute *attr, NTFSMftEntry *fr,
             list_entry_offset < attr_list_size &&
                 read_attr((char*) attr, list_entry_offset, 280, (char*) list_entry);
             list_entry_offset += list_entry->entry_len) {
-        
-       /* std::cout << (attr->nonresident_flag ?
-                ((NTFSNonresidentAttr*) attr)->actual_content_size :
-                ((NTFSResidentAttr*) attr)->content_size) << " "
-                << list_entry->entry_len << " " 
-                << list_entry->fr << " "
-                << base_fr_num << " " 
-                << type << " "
-                << list_entry->type_id << " "
-                << attr->attr_len << std::endl;*/
-        
+
         if (list_entry_offset == 184 &&
                 list_entry->entry_len == 0) {
             throw;
