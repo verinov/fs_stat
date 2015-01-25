@@ -102,13 +102,13 @@ void Ext::Parse(BlockFunc& printBlock, MetadataFunc& printMetadata) {
     int bg_per_metabg = block_size_ / desc_size_;
     uint64_t meta_bg_start = first_meta_bg_ ? first_meta_bg_ : bg_per_metabg;
 
-    //first groups in the beginning are in the same "meta_bg"
+    // first groups in the beginning are in the same "meta_bg"
     for (int bg = 0; bg < meta_bg_start; bg++) {
         disk_->read(&bg_desc, desc_size_, (first_block_ + 1) * block_size_ + bg * desc_size_);
         analize_desc(printBlock, printMetadata, bg_desc, bg);
     }
 
-    //process metablocks
+    // process metablocks
     for (uint64_t metabg_first_bg = meta_bg_start; blocks_per_group_ * metabg_first_bg < blocks_count_;
             metabg_first_bg += bg_per_metabg) {
         for (int bg = 0; bg < bg_per_metabg && blocks_per_group_ * (metabg_first_bg + bg - 1) < blocks_count_; bg++) {
@@ -157,7 +157,6 @@ void Ext::analize_desc(BlockFunc& printBlock, MetadataFunc& printMetadata, const
 }
 
 void Ext::print_inode_metadata(MetadataFunc& printMetadata, const ExtInode* inode, uint32_t inode_num) {
-    return; // approx. -15% time
     uint64_t file_size = inode->i_size_lo;
     file_size += ((uint64_t) inode->i_size_high << 32);
 
@@ -193,18 +192,19 @@ void Ext::analize_inode(BlockFunc& printBlock, MetadataFunc& printMetadata, cons
     bool ea_inode_flag = 0x200000 & inode->i_flags; // TODO: do we need extended attributes?
     bool inline_data_flag = 0x10000000 & inode->i_flags;
 
-    print_inode_metadata(printMetadata, inode, inode_num);
+    // PERF: approx. -20% time
+    // print_inode_metadata(printMetadata, inode, inode_num);
 
     if (inline_data_flag) {
         // there are no blocks for this inode
         return;
     }
 
-    //all values are in blocks
+    // all values are in blocks
     uint32_t curr_offset = 0, start_offset = 0, start_phys_offset = 0, next_phys_offset = 0;
 
     if (extents_flag) {
-        //extents
+        // extents
         ExtExtentHeader* extent_header = (ExtExtentHeader*) inode->i_block;
         int entry_count = extent_header->eh_entries;
         int depth = extent_header->eh_depth;
@@ -218,7 +218,7 @@ void Ext::analize_inode(BlockFunc& printBlock, MetadataFunc& printMetadata, cons
                     start_phys_offset, curr_offset - start_offset);
         }
     } else {
-        //block map
+        // block map
         for (uint32_t record = 0; record < 12 && curr_offset * block_size_ < file_size; ++record) {
             analize_block(printBlock, curr_offset, inode->i_block[record],
                     start_offset, start_phys_offset, next_phys_offset, file_size, 0, inode_num);
@@ -244,7 +244,7 @@ inline uint32_t power(uint32_t base, int power) {
     return potential;
 }
 
-//mapping only applicable for lower 2^32 blocks
+// mapping only applicable for lower 2^32 blocks
 void Ext::analize_block(BlockFunc& printBlock, uint32_t& curr_offset, uint32_t block_phys_offset,
         uint32_t& start_offset, uint32_t& start_phys_offset, uint32_t& next_phys_offset,
         uint64_t file_size, int depth, uint32_t inode_num) {
@@ -254,20 +254,20 @@ void Ext::analize_block(BlockFunc& printBlock, uint32_t& curr_offset, uint32_t b
     }
 
     if (block_phys_offset == 0) {
-        //everything in this subtree is zeroes
+        // everything in this subtree is zeroes
         if (start_phys_offset != 0) {
             printBlock(std::to_string(inode_num), file_size, start_offset,
                     start_phys_offset, curr_offset - start_offset);
         }
 
-        start_offset = -1; //just for debug, this value shouldn't be used anywhere
+        start_offset = -1; // just for debug, this value shouldn't be used anywhere
         next_phys_offset = start_phys_offset = 0;
         curr_offset += power(block_size_ / 4, depth);
         return;
     }
 
     if (depth == 0) {
-        //leaf node of extent tree
+        // leaf node of extent tree
         if (block_phys_offset == next_phys_offset) {
             next_phys_offset++;
         } else {
@@ -282,7 +282,7 @@ void Ext::analize_block(BlockFunc& printBlock, uint32_t& curr_offset, uint32_t b
         curr_offset++;
 
     } else {
-        //interior node of extent tree
+        // interior node of extent tree
         std::unique_ptr<char> block(new char[block_size_]);
         disk_->read(block.get(), block_size_, block_phys_offset * block_size_);
 
@@ -306,7 +306,7 @@ void Ext::analize_extent_node(BlockFunc& printBlock, uint32_t& curr_offset, char
                 start_offset, start_phys_offset, next_phys_offset,
                 file_size, inode_num);
     } else {
-        //read header and go through entries
+        // read header and go through entries
         ExtExtentIndex* extent_index = (ExtExtentIndex*) entry;
         uint64_t node_phys_offset = extent_index->ei_leaf_lo + ((uint64_t) extent_index->ei_leaf_hi << 32);
         std::unique_ptr<char> node_block(new char[block_size_]);
