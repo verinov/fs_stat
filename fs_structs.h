@@ -4,19 +4,23 @@
 #include <stdint.h>
 
 struct __attribute__((__packed__)) NTFSMftEntry {
-    char signature[4];
-    uint16_t fixup_offset;
-    uint16_t fixup_count;
-    uint64_t lsn;
-    uint16_t seq_value;
-    uint16_t link_count;
-    uint16_t first_attr_offset;
-    uint16_t flags;
-    uint32_t used_entry_size;
-    uint32_t alloc_entry_size;uint64_t base_fr : 48;
+    char signature[4]; // 0-3
+    uint16_t fixup_offset; // 4-5
+    uint16_t fixup_count; // 6-7
+    uint64_t lsn; // 8-15
+    uint16_t seq_value; // 16-17
+    uint16_t link_count; // 18-19
+    uint16_t first_attr_offset; // 20-21
+    uint16_t flags; // 22-23
+    uint32_t used_entry_size; // 24-27
+    uint32_t alloc_entry_size; // 28-31
+    uint64_t base_fr : 48; // 32-37
     uint16_t base_fr_seq_number;
-    
-    uint16_t next_attr_id;
+
+
+
+
+    uint16_t next_attr_id; // 40-41
     //attributes and fixup values are omitted here
 };
 
@@ -91,7 +95,7 @@ struct __attribute__((__packed__)) NTFSAttrListEntry {
     uint8_t name_offset;
     uint64_t start_vcn;
     uint64_t fr : 48;
-    uint16_t fr_seq_number;    
+    uint16_t fr_seq_number;
     uint8_t attr_id;
 };
 

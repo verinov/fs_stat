@@ -1,4 +1,4 @@
-/* 
+/*
  * File:   fs_stat.h
  * Author: alex
  *
@@ -32,12 +32,12 @@ class DiskOverRegFile: public Disk {
 public:
     DiskOverRegFile(const std::string& file_path);
     ~DiskOverRegFile();
-    
+
     void read_blocks(void* buffer, size_t size, uint64_t offset);
     size_t get_block_size();
-    
+
 private:
-    std::ifstream file_;   
+    std::ifstream file_;
 };
 
 
@@ -46,15 +46,11 @@ public:
     virtual void Parse(BlockFunc& printBlock, MetadataFunc& printMetadata);
     FSParser(std::shared_ptr<Disk> disk);
     FSParser(){filesystem_ = nullptr;}
-    virtual ~FSParser() {
-        if (filesystem_) {
-            delete filesystem_;
-        }
-    }
-    
+    virtual ~FSParser();
+
 protected:
     std::shared_ptr<Disk> disk_;
-    
+
 private:
     FSParser* filesystem_;
 };
