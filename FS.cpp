@@ -27,3 +27,9 @@ FSParser::FSParser(std::shared_ptr<Disk> disk) {
 
     filesystem_ = nullptr;
 }
+
+FSParser::~FSParser() {
+    if (filesystem_ != nullptr) {
+        delete filesystem_;
+    }
+}

@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
        // system("sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'");
         //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/big_ext") << std::endl;
         //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext4") << std::endl;
-        std::cout << Test("/run/media/alex/DATA/Work/fs_stat/fs_images/flash_img.img") << std::endl;
+        std::cout << Test("/mnt/hgfs/fs_stat/fs_images/flash_img.img") << std::endl;
         //std::cout << Test("/media/alex/DATA/Work/fs_stat/fs_images/small_ext3") << std::endl;
     }
 
